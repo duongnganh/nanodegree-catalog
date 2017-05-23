@@ -1,0 +1,15 @@
+<div class="row top-menu" style="margin: 10px">
+	<div class="col-md-3 col-md-offset-1">
+		<a href="{{url_for('welcome')}}" class="btn btn-primary" role="button">
+			<span class="glyphicon glyphicon-home" aria-hidden="true"></span> Home
+		</a>
+	</div>
+	<div class="col-md-6 text-right">
+		{% if g.login %}
+		<a href="{{url_for('login')}}" class="btn btn-success" role="button" style="display: none"> Sign in / Sign up </a>
+		{% else %}
+		<a href="{{url_for('login')}}" class="btn btn-success" role="button"> Sign in / Sign up </a>
+		{% endif %}
+		<a href="{{url_for('gdisconnect')}}" class="btn btn-default" role="button"> Logout {{g.username}}</a>
+	</div>
+</div>
