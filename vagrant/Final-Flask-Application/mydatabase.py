@@ -60,6 +60,10 @@ class MenuItem(Base):
 			'created_date' : self.created_date,
 		}
 
+# Create engine with name restaurant.db, using sqlite.
+
 engine = create_engine('sqlite:///restaurantmenu.db')
+
+# Create tables in the above db
 
 Base.metadata.create_all(engine)

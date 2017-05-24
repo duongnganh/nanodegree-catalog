@@ -21,6 +21,12 @@
 
 {% endfor %}
 
+{% if restaurants|length == 0 %}
+
+<p>No restaurant available. Please add some!</p>
+
+{% endif %}
+
 <p><a href = "{{url_for('newRestaurant')}}" class="btn btn-success" role="button">Add a restaurant</a></p>
 
 </div>
@@ -34,6 +40,12 @@
 <p><a href = '{{url_for('menuItem', menu_id = i.id) }}'>{{i.name}}</a> ({{i.restaurant.name}})</p>
 
 {% endfor %}
+
+{% if items|length == 0 %}
+
+<p>No item available. Please add some!</p>
+
+{% endif %}
 
 </div>
 </div>
