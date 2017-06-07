@@ -85,7 +85,7 @@ def delete_user():
 def login():
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
-    
+
     # Login with token
     if 'token' in request.json:
         token = request.json.get('token')
@@ -142,7 +142,7 @@ def logout():
 
     if g.user.fb_access_token is not None:
         fbdisconnect(g.user.fb_id, g.user.fb_access_token)
-    
+
     g.user.logout()
     session.add(g.user)
     session.commit()
@@ -182,7 +182,8 @@ def gconnect(code):
         return response
 
     # Verify that the access token is valid for this app.
-    if result['issued_to'] != json.loads(open('client_secrets.json', 'r').read())['web']['client_id']:
+    if result['issued_to'] != json.loads(
+            open('client_secrets.json', 'r').read())['web']['client_id']:
         response = make_response(
             json.dumps("Token's client ID does not match app's."), 401)
         print "Token's client ID does not match app's."
@@ -207,12 +208,12 @@ def gconnect(code):
     user.gplus_access_token = credentials.access_token
     user.gplus_id = gplus_id
     user.token = user.generate_auth_token(600)
-    
+
     session.add(user)
     session.commit()
 
     g.user = user
-        
+
     return jsonify({'token': user.token}), 200
 
 
@@ -237,14 +238,15 @@ def fbconnect(code):
     app_secret = json.loads(
         open('fb_client_secrets.json', 'r').read())['web']['app_secret']
     url = 'https://graph.facebook.com/oauth/access_token?grant_type=' \
-          'fb_exchange_token&client_id=%s&client_secret=%s&fb_exchange_token=%s' \
-          % (app_id, app_secret, code)
+          'fb_exchange_token&client_id=%s&client_secret=%s'\
+          '&fb_exchange_token=%s' % (app_id, app_secret, code)
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
 
     access_token = json.loads(result)['access_token']
 
-    url = "https://graph.facebook.com/v2.9/me?fields=email,name,id,picture&access_token=%s" % access_token
+    url = "https://graph.facebook.com/v2.9/me?"\
+          "fields=email,name,id,picture&access_token=%s" % access_token
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
     data = json.loads(result)
@@ -262,12 +264,12 @@ def fbconnect(code):
     user.fb_access_token = access_token
     user.fb_id = data["id"]
     user.token = user.generate_auth_token(600)
-    
+
     session.add(user)
     session.commit()
 
     g.user = user
-        
+
     return jsonify({'token': user.token}), 200
 
 
