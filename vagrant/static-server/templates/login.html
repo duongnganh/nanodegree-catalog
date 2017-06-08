@@ -69,14 +69,12 @@
 			fjs.parentNode.insertBefore(js, fjs);
 		}(document, 'script', 'facebook-jssdk'));
 		// Here we run a very simple test of the Graph API after login is
-		// successful.  See statusChangeCallback() for when this call is made.
+		// successful.
 		function sendTokenToServer() {
 			var access_token = FB.getAuthResponse()['accessToken'];
 			console.log(access_token)
-			console.log('Welcome!  Fetching your information.... ');
 			FB.api('/me', function(response) {
-				console.log('Successful login for: ' + response.name);
-			$('#result').html('access_token:</br>'+ access_token + '')
+				$('#result').html('One-Time Auth Code:</br>' + access_token + '')
 			});
 		}
 	</script>
