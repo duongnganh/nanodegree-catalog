@@ -6,7 +6,7 @@ from myapp.controllers import *
 def create_restaurant():
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
-    errors = Restaurant.validate(request.json)
+    errors = validate_insertion(request.json, ['name'])
 
     if len(errors) != 0:
         return jsonify(errors=[error for error in errors]), 400
@@ -15,13 +15,13 @@ def create_restaurant():
                             user_id=g.user.id)
     session.add(restaurant)
     session.commit()
-    return jsonify(result=True), 201
+    return jsonify(restaurant.serialize), 201
 
 
 @app.route('/api/v1/restaurants', methods=['GET'])
 def get_restaurants():
     restaurants = session.query(Restaurant).all()
-    return jsonify(restaurants=[r.serialize for r in restaurants])
+    return jsonify(restaurants=[r.serialize for r in restaurants]), 200
 
 
 @app.route('/api/v1/restaurants/<int:restaurant_id>', methods=['PUT'])
@@ -29,9 +29,10 @@ def get_restaurants():
 def update_restaurant(restaurant_id):
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
+    errors = validate_update(request.json, ['name'])
 
-    if request.json.get('delete') == 'true':
-        return delete_restaurant(restaurant_id)
+    if len(errors) != 0:
+        return jsonify(errors=[error for error in errors]), 400
 
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
@@ -44,9 +45,11 @@ def update_restaurant(restaurant_id):
 
     session.add(restaurant)
     session.commit()
-    return jsonify(result=True), 200
+    return jsonify(restaurant.serialize), 200
 
 
+@app.route('/api/v1/restaurants/<int:restaurant_id>', methods=['DELETE'])
+@login_required
 def delete_restaurant(restaurant_id):
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
@@ -63,4 +66,4 @@ def delete_restaurant(restaurant_id):
 
     session.delete(restaurant)
     session.commit()
-    return jsonify(result=True), 200
+    return jsonify(restaurants=[r.serialize for r in restaurants]), 200

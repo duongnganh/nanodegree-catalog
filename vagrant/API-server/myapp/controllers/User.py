@@ -6,7 +6,7 @@ from myapp.controllers import *
 def create_user():
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
-    errors = User.validate(request.json)
+    errors = validate_insertion(request.json, ['email', 'password'])
 
     if len(errors) != 0:
         return jsonify(errors=[error for error in errors]), 400
@@ -20,16 +20,13 @@ def create_user():
         return jsonify({'message': 'user already existed'}), 409
 
     user = User(name=name, email=email, picture=picture)
-    user.hash_password(password)
+    user.password = user.hash_password(password)
     session.add(user)
     session.commit()
 
     user.token = user.generate_auth_token(6000)
     session.add(user)
     session.commit()
-
-    g.user = user
-
     return jsonify({'token': user.token}), 201
 
 
@@ -44,9 +41,10 @@ def get_users():
 def update_user():
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
+    errors = validate_update(request.json, ['email', 'password'])
 
-    if request.json.get('delete') == 'true':
-        return delete_user()
+    if len(errors) != 0:
+        return jsonify(errors=[error for error in errors]), 400
 
     user = session.query(User).filter_by(id=g.user.id).first()
     if not user:
@@ -63,10 +61,11 @@ def update_user():
 
     session.add(user)
     session.commit()
+    return jsonify(user.serialize), 200
 
-    return jsonify(result=True), 200
 
-
+@app.route('/api/v1/users', methods=['DELETE'])
+@login_required
 def delete_user():
     user = session.query(User).filter_by(id=g.user.id).first()
     if not user:
@@ -74,8 +73,7 @@ def delete_user():
 
     session.delete(user)
     session.commit()
-
-    return jsonify(result=True), 200
+    return jsonify(users=[u.serialize for u in users]), 200
 
 # ================================================================
 
@@ -87,23 +85,23 @@ def login():
         return jsonify({'error': 'invalid json'}), 400
 
     # Login with token
-    if 'token' in request.json:
-        token = request.json.get('token')
+    if request.headers and 'token' in request.headers:
+        token = request.headers.get('token')
         user_id = User.verify_auth_token(token)
         if user_id:
             user = session.query(User).filter_by(id=user_id).first()
             if user:
-                g.user = user
                 return jsonify({'token': token}), 200
         return jsonify({'error': 'invalid token'}), 200
 
     # Login with OAuth
     if 'provider' in request.json:
         provider = request.json.get('provider')
-        if provider == 'google' and 'code' in request.json:
-            return gconnect(request.json.get('code'))
-        elif provider == 'facebook' and 'code' in request.json:
-            return fbconnect(request.json.get('code'))
+        code = request.json.get('code')
+        if provider == 'google' and code:
+            return gconnect(code)
+        elif provider == 'facebook' and code:
+            return fbconnect(code)
         else:
             return jsonify({'error': 'invalid provider'}), 200
 
@@ -128,7 +126,7 @@ def login():
     user.token = token
     session.add(user)
     session.commit()
-    g.user = user
+
     return jsonify({'token': token}), 200
 
 
@@ -147,8 +145,6 @@ def logout():
     session.add(g.user)
     session.commit()
 
-    g.user = None
-
     return jsonify({'result': True}), 200
 
 
@@ -159,9 +155,7 @@ def gconnect(code):
         oauth_flow.redirect_uri = 'postmessage'
         credentials = oauth_flow.step2_exchange(code)
     except FlowExchangeError:
-        response = make_response(
-          json.dumps('Failed to upgrade the authorization code.'), 401)
-        return response
+        return jsonify({'error': 'Failed to upgrade the authorization code.'}), 401
 
     # Check that the access token is valid.
     access_token = credentials.access_token
@@ -171,23 +165,17 @@ def gconnect(code):
     result = json.loads(h.request(url, 'GET')[1])
     # If there was an error in the access token info, abort.
     if result.get('error') is not None:
-        response = make_response(json.dumps(result.get('error')), 500)
-        return response
+        return jsonify({'error': result.get('error')}), 500
 
     # Verify that the access token is used for the intended user.
     gplus_id = credentials.id_token['sub']
     if result['user_id'] != gplus_id:
-        response = make_response(
-            json.dumps("Token's user ID doesn't match given user ID."), 401)
-        return response
+        return jsonify({'error': "Token's user ID doesn't match given user ID."}), 401
 
     # Verify that the access token is valid for this app.
     if result['issued_to'] != json.loads(
             open('client_secrets.json', 'r').read())['web']['client_id']:
-        response = make_response(
-            json.dumps("Token's client ID does not match app's."), 401)
-        print "Token's client ID does not match app's."
-        return response
+        return jsonify({'error': "Token's client ID does not match app's."}), 401
 
     # Get user info
     userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
@@ -212,8 +200,6 @@ def gconnect(code):
     session.add(user)
     session.commit()
 
-    g.user = user
-
     return jsonify({'token': user.token}), 200
 
 
@@ -223,10 +209,8 @@ def gdisconnect(access_token):
     result = h.request(url, 'GET')[0]
     if result['status'] != '200':
         # For whatever reason, the given token was invalid.
-        response = make_response(
-            json.dumps('Failed to revoke google token for given user.'), 400)
-        return response
-    return None
+        return False
+    return True
 
 
 def fbconnect(code):
@@ -268,8 +252,6 @@ def fbconnect(code):
     session.add(user)
     session.commit()
 
-    g.user = user
-
     return jsonify({'token': user.token}), 200
 
 
@@ -279,6 +261,6 @@ def fbdisconnect(facebook_id, access_token):
         % (facebook_id, access_token)
     h = httplib2.Http()
     result = h.request(url, 'DELETE')[1]
-    if not result.get('error'):
-        return "you have been logged out"
-    return result.get('error')
+    if result.get('error'):
+        return False
+    return True

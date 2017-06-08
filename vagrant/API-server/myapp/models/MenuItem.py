@@ -29,22 +29,3 @@ class MenuItem(Base):
             'restaurant_id': self.restaurant_id,
             'user_id': self.user_id
         }
-
-    @staticmethod
-    def validate(data):
-        errors = []
-        required_fields = ['name', 'description', 'price', 'course']
-        if type(data) != dict:
-            error = dict({"Missing required parameters":
-                         " ".format(', '.join(required_fields))})
-            errors.append(error)
-        else:
-            for value in required_fields:
-                if value not in data:
-                    error = dict({value: "Required"})
-                    errors.append(error)
-                else:
-                    if not data[value]:
-                        error = dict({value: "Required"})
-                        errors.append(error)
-        return errors

@@ -11,7 +11,6 @@ class User(Base):
     email = Column(String(250), index=True, nullable=False)
     picture = Column(String(250))
     password_hash = Column(String(64))
-    # provider = Column(String)
     gplus_access_token = Column(String)
     gplus_id = Column(String)
     fb_access_token = Column(String)
@@ -28,7 +27,7 @@ class User(Base):
 
     # Use passlibs.apps.custom_app_context and SHA5 algorithm to hash passwords
     def hash_password(self, password):
-        self.password_hash = pwd_context.encrypt(password)
+        return pwd_context.encrypt(password)
 
     def verify_password(self, password):
         return pwd_context.verify(password, self.password_hash)
@@ -59,22 +58,3 @@ class User(Base):
             return None
         user_id = data['id']
         return user_id
-
-    @staticmethod
-    def validate(data):
-        errors = []
-        required_fields = ['name', 'email', 'password']
-        if type(data) != dict:
-            error = dict({"Missing required parameters":
-                         " ".format(', '.join(required_fields))})
-            errors.append(error)
-        else:
-            for value in required_fields:
-                if value not in data:
-                    error = dict({value: "Required"})
-                    errors.append(error)
-                else:
-                    if not data[value]:
-                        error = dict({value: "Required"})
-                        errors.append(error)
-        return errors

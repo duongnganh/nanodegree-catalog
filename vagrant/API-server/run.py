@@ -1,6 +1,7 @@
-from myapp.controllers import app
-from initialize_db import delete, add
 import sys
+
+from initialize_db import delete, add
+from myapp.controllers import app
 
 if __name__ == '__main__':
     args = sys.argv[1:]

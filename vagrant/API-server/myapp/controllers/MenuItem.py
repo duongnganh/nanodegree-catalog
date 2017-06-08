@@ -7,7 +7,7 @@ from myapp.controllers import *
 def create_menuitem(restaurant_id):
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
-    errors = MenuItem.validate(request.json)
+    errors = validate_insertion(request.json, ['name', 'description', 'price', 'course'])
 
     if len(errors) != 0:
         return jsonify(errors=[error for error in errors]), 400
@@ -28,7 +28,7 @@ def create_menuitem(restaurant_id):
 
     session.add(item)
     session.commit()
-    return jsonify(result=True), 201
+    return jsonify(item=item.serialize), 201
 
 
 @app.route('/api/v1/restaurants/<int:restaurant_id>/menuitems',
@@ -39,7 +39,7 @@ def get_menuitems(restaurant_id):
         return jsonify({'error': 'Restaurant not found'}), 404
 
     items = session.query(MenuItem).filter_by(restaurant_id=restaurant_id).all()
-    return jsonify(items=[i.serialize for i in items])
+    return jsonify(items=[i.serialize for i in items]), 200
 
 
 @app.route('/api/v1/menuitems/<int:menu_id>', methods=['GET'])
@@ -47,7 +47,7 @@ def get_menuitem(menu_id):
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
         return jsonify({'error': 'Item not found'}), 404
-    return jsonify(item=item.serialize)
+    return jsonify(item=item.serialize), 200
 
 
 @app.route('/api/v1/menuitems/<int:menu_id>', methods=['PUT'])
@@ -55,9 +55,10 @@ def get_menuitem(menu_id):
 def update_menuitem(menu_id):
     if not request.json:
         return jsonify({'error': 'invalid json'}), 400
+    errors = validate_update(request.json, ['name', 'description', 'price', 'course'])
 
-    if request.json.get('delete') == 'true':
-        return delete_menuitem(menu_id)
+    if len(errors) != 0:
+        return jsonify(errors=[error for error in errors]), 400
 
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
@@ -82,9 +83,11 @@ def update_menuitem(menu_id):
 
     session.add(item)
     session.commit()
-    return jsonify(result=True), 200
+    return jsonify(item.serialize), 200
 
 
+@app.route('/api/v1/menuitems/<int:menu_id>', methods=['DELETE'])
+@login_required
 def delete_menuitem(menu_id):
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
@@ -95,7 +98,9 @@ def delete_menuitem(menu_id):
     if not restaurant:
         return jsonify({'error': 'Restaurant not found'}), 404
 
+    if restaurant.user_id != g.user.id:
+        abort(403)
+
     session.delete(item)
     session.commit()
-
-    return jsonify(result=True), 200
+    return jsonify(items=[i.serialize for i in items]), 200
