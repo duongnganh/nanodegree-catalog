@@ -5,7 +5,7 @@ from myapp.controllers import *
 @login_required
 def create_restaurant():
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
     errors = validate_insertion(request.json, ['name'])
 
     if len(errors) != 0:
@@ -28,7 +28,7 @@ def get_restaurants():
 @login_required
 def update_restaurant(restaurant_id):
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
     errors = validate_update(request.json, ['name'])
 
     if len(errors) != 0:
@@ -36,10 +36,10 @@ def update_restaurant(restaurant_id):
 
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     if restaurant.user_id != g.user.id:
-        abort(403)
+        abort(403, 'You are not the owner of this restaurant')
 
     restaurant.name = request.json.get('name')
 
@@ -53,10 +53,10 @@ def update_restaurant(restaurant_id):
 def delete_restaurant(restaurant_id):
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     if restaurant.user_id != g.user.id:
-        abort(403)
+        abort(403, 'You are not the owner of this restaurant')
 
     items = session.query(MenuItem).filter_by(
         restaurant_id=restaurant_id).all()

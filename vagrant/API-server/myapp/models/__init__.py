@@ -16,29 +16,31 @@ Base = declarative_base()
 def validate_insertion(data, required_fields):
     errors = []
     if type(data) != dict:
-        error = dict({"Missing required parameters":
-                     " ".format(', '.join(required_fields))})
+        error = dict({'Missing required parameters':
+                     ' '.format(', '.join(required_fields))})
         errors.append(error)
         return errors
 
     for field in required_fields:
         if field not in data or not data[field]:
-            error = dict({value: "Required"})
+            error = dict({field: 'Required'})
             errors.append(error)
+    return errors
 
 
 def validate_update(data, possible_fields):
     errors = []
     if type(data) != dict:
-        error = dict({"Missing required parameters":
-                     " ".format(', '.join(required_fields))})
+        error = dict({'Missing required parameters':
+                     ' '.format(', '.join(required_fields))})
         errors.append(error)
         return errors
 
     for field in possible_fields:
         if field in data and not data[field]:
-            error = dict({value: "Required"})
+            error = dict({field: 'Required'})
             errors.append(error)
+    return errors
 
 
 from myapp.models.Restaurant import *

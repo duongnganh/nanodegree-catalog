@@ -5,7 +5,7 @@ from myapp.controllers import *
 @app.route('/api/v1/users', methods=['POST'])
 def create_user():
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
     errors = validate_insertion(request.json, ['email', 'password'])
 
     if len(errors) != 0:
@@ -17,7 +17,8 @@ def create_user():
     password = request.json.get('password')
 
     if session.query(User).filter_by(email=email).first() is not None:
-        return jsonify({'message': 'user already existed'}), 409
+        abort(409, 'User already existed')
+
 
     user = User(name=name, email=email, picture=picture)
     user.password = user.hash_password(password)
@@ -40,20 +41,21 @@ def get_users():
 @login_required
 def update_user():
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
-    errors = validate_update(request.json, ['email', 'password'])
+        abort(400, 'Invalid json')
+    errors = validate_update(request.json, ['password'])
 
     if len(errors) != 0:
         return jsonify(errors=[error for error in errors]), 400
 
     user = session.query(User).filter_by(id=g.user.id).first()
     if not user:
-        return jsonify({'error': 'User not found'}), 404
+        abort(404, 'User not found')
+
+    if 'email' in request.json:
+        abort(400, 'Cannot change email')
 
     if 'name' in request.json:
         user.name = request.json.get('name')
-    if 'email' in request.json:
-        user.email = request.json.get('email')
     if 'picture' in request.json:
         user.picture = request.json.get('picture')
     if 'password' in request.json:
@@ -69,7 +71,7 @@ def update_user():
 def delete_user():
     user = session.query(User).filter_by(id=g.user.id).first()
     if not user:
-        return jsonify({'error': 'User not found'}), 404
+        abort(404, 'User not found')
 
     session.delete(user)
     session.commit()
@@ -82,17 +84,17 @@ def delete_user():
 @app.route('/api/v1/login', methods=['POST'])
 def login():
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
 
     # Login with token
-    if request.headers and 'token' in request.headers:
-        token = request.headers.get('token')
+    if request.headers and 'Authorization' in request.headers:
+        token = request.headers.get('Authorization')
         user_id = User.verify_auth_token(token)
         if user_id:
             user = session.query(User).filter_by(id=user_id).first()
-            if user:
+            if user and user.token:
                 return jsonify({'token': token}), 200
-        return jsonify({'error': 'invalid token'}), 200
+        abort(400, 'Invalid token')
 
     # Login with OAuth
     if 'provider' in request.json:
@@ -103,24 +105,24 @@ def login():
         elif provider == 'facebook' and code:
             return fbconnect(code)
         else:
-            return jsonify({'error': 'invalid provider'}), 200
+            abort(400, 'Invalid provider')
 
     # Login with email and password
     if 'email' not in request.json:
-        return jsonify({'error': 'missing email'}), 400
+        abort(400, 'Missing email')
 
     if 'password' not in request.json:
-        return jsonify({'error': 'missing password'}), 400
+        abort(400, 'Missing password')
 
     password = request.json.get('password')
     email = request.json.get('email')
     user = session.query(User).filter_by(email=email).first()
 
     if not user:
-        return jsonify({"error": "Invalid email"}), 404
+        abort(404, 'Invalid email')
 
     if not user.verify_password(password):
-        return jsonify({"error": "Invalid password"}), 400
+        abort(403, 'Invalid password')
 
     token = user.generate_auth_token(6000)
     user.token = token
@@ -130,16 +132,22 @@ def login():
     return jsonify({'token': token}), 200
 
 
-@app.route('/api/v1/logout', methods=['POST'])
+@app.route('/api/v1/logout', methods=['GET'])
 @login_required
 def logout():
+    errors = []
     if g.user.gplus_access_token is not None:
-        response = gdisconnect(g.user.gplus_access_token)
-        if response:
-            return response
+        if not gdisconnect():
+            error = dict({'error': 'Cannot disconnect from Google Plus'})
+            errors.append(error)
 
     if g.user.fb_access_token is not None:
-        fbdisconnect(g.user.fb_id, g.user.fb_access_token)
+        if not fbdisconnect():
+            error = dict({'error': 'Cannot disconnect from Facebook'})
+            errors.append(error)
+
+    if len(errors) != 0:
+        return jsonify(errors=[error for error in errors]), 400
 
     g.user.logout()
     session.add(g.user)
@@ -155,7 +163,7 @@ def gconnect(code):
         oauth_flow.redirect_uri = 'postmessage'
         credentials = oauth_flow.step2_exchange(code)
     except FlowExchangeError:
-        return jsonify({'error': 'Failed to upgrade the authorization code.'}), 401
+        abort(401, 'Failed to upgrade the authorization code')
 
     # Check that the access token is valid.
     access_token = credentials.access_token
@@ -163,28 +171,29 @@ def gconnect(code):
            % access_token)
     h = httplib2.Http()
     result = json.loads(h.request(url, 'GET')[1])
+
     # If there was an error in the access token info, abort.
-    if result.get('error') is not None:
-        return jsonify({'error': result.get('error')}), 500
+    if 'error' in result:
+        abort(500, result['error'])
 
     # Verify that the access token is used for the intended user.
     gplus_id = credentials.id_token['sub']
     if result['user_id'] != gplus_id:
-        return jsonify({'error': "Token's user ID doesn't match given user ID."}), 401
+        abort(401, "Token's user ID doesn't match given user ID.")
 
     # Verify that the access token is valid for this app.
     if result['issued_to'] != json.loads(
             open('client_secrets.json', 'r').read())['web']['client_id']:
-        return jsonify({'error': "Token's client ID does not match app's."}), 401
+        abort(401, "Token's client ID does not match app's.")
 
-    # Get user info
-    userinfo_url = "https://www.googleapis.com/oauth2/v1/userinfo"
+    # Access token is verified and valid. Get user info
+    userinfo_url = 'https://www.googleapis.com/oauth2/v1/userinfo'
     params = {'access_token': credentials.access_token, 'alt': 'json'}
     answer = requests.get(userinfo_url, params=params)
     data = answer.json()
 
-    # see if user exists. If it doesn't, make a new one
-    user = session.query(User).filter_by(email=data["email"]).first()
+    # See if user exists. If it doesn't, make a new one
+    user = session.query(User).filter_by(email=data['email']).first()
     if not user:
         user = User(
             name=data['name'],
@@ -203,20 +212,19 @@ def gconnect(code):
     return jsonify({'token': user.token}), 200
 
 
-def gdisconnect(access_token):
+def gdisconnect():
+    access_token = g.user.gplus_access_token
     url = 'https://accounts.google.com/o/oauth2/revoke?token=%s' % access_token
     h = httplib2.Http()
     result = h.request(url, 'GET')[0]
     if result['status'] != '200':
-        # For whatever reason, the given token was invalid.
         return False
     return True
 
 
 def fbconnect(code):
-    # print "access token received %s " % access_token
-
     # Get access token from one-time exchange code
+    # Verify that the access token is valid for this user and app
     app_id = json.loads(open('fb_client_secrets.json', 'r').read())[
         'web']['app_id']
     app_secret = json.loads(
@@ -225,28 +233,40 @@ def fbconnect(code):
           'fb_exchange_token&client_id=%s&client_secret=%s'\
           '&fb_exchange_token=%s' % (app_id, app_secret, code)
     h = httplib2.Http()
-    result = h.request(url, 'GET')[1]
+    result = json.loads(h.request(url, 'GET')[1])
+    if 'error' in result:
+        abort(401, result['error']['message'])
 
-    access_token = json.loads(result)['access_token']
+    # Check that the access token is valid.
+    access_token = result['access_token']
+    url = ('https://graph.facebook.com/me?access_token=%s'
+           % access_token)
+    h = httplib2.Http()
+    result = json.loads(h.request(url, 'GET')[1])
 
-    url = "https://graph.facebook.com/v2.9/me?"\
-          "fields=email,name,id,picture&access_token=%s" % access_token
+    # If there was an error in the access token info, abort.
+    if 'error' in result:
+        abort(500, result['error']['message'])
+
+    # Access token is verified and valid. Get user info
+    url = 'https://graph.facebook.com/v2.9/me?'\
+          'fields=email,name,id,picture&access_token=%s' % access_token
     h = httplib2.Http()
     result = h.request(url, 'GET')[1]
     data = json.loads(result)
 
     # see if user exists. If it doesn't, make a new one
-    user = session.query(User).filter_by(email=data["email"]).first()
+    user = session.query(User).filter_by(email=data['email']).first()
     if not user:
         user = User(
             name=data['name'],
-            picture=data["picture"]["data"]["url"],
+            picture=data['picture']['data']['url'],
             email=data['email'])
         session.add(user)
         session.commit()
 
     user.fb_access_token = access_token
-    user.fb_id = data["id"]
+    user.fb_id = data['id']
     user.token = user.generate_auth_token(600)
 
     session.add(user)
@@ -255,12 +275,15 @@ def fbconnect(code):
     return jsonify({'token': user.token}), 200
 
 
-def fbdisconnect(facebook_id, access_token):
+def fbdisconnect():
+    facebook_id = g.user.fb_id
+    access_token = g.user.fb_access_token
     # The access token must me included to successfully logout
     url = 'https://graph.facebook.com/%s/permissions?access_token=%s' \
         % (facebook_id, access_token)
     h = httplib2.Http()
     result = h.request(url, 'DELETE')[1]
-    if result.get('error'):
+    data = json.loads(result)
+    if 'error' in data:
         return False
     return True

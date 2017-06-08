@@ -1,6 +1,6 @@
 from myapp.models import *
 
-secret_key = "FW7YLK1PWVDMIWFU9RPLCVIUQHZHENOC"
+secret_key = 'FW7YLK1PWVDMIWFU9RPLCVIUQHZHENOC'
 
 
 class User(Base):

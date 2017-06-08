@@ -6,7 +6,7 @@ from myapp.controllers import *
 @login_required
 def create_menuitem(restaurant_id):
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
     errors = validate_insertion(request.json, ['name', 'description', 'price', 'course'])
 
     if len(errors) != 0:
@@ -14,10 +14,10 @@ def create_menuitem(restaurant_id):
 
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     if restaurant.user_id != g.user.id:
-        abort(403)
+        abort(403, 'You are not the owner of this restaurant')
 
     item = MenuItem(name=request.json.get('name'),
                     description=request.json.get('description'),
@@ -36,7 +36,7 @@ def create_menuitem(restaurant_id):
 def get_menuitems(restaurant_id):
     restaurant = session.query(Restaurant).filter_by(id=restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     items = session.query(MenuItem).filter_by(restaurant_id=restaurant_id).all()
     return jsonify(items=[i.serialize for i in items]), 200
@@ -46,7 +46,7 @@ def get_menuitems(restaurant_id):
 def get_menuitem(menu_id):
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
-        return jsonify({'error': 'Item not found'}), 404
+        abort(404, 'Item not found')
     return jsonify(item=item.serialize), 200
 
 
@@ -54,7 +54,7 @@ def get_menuitem(menu_id):
 @login_required
 def update_menuitem(menu_id):
     if not request.json:
-        return jsonify({'error': 'invalid json'}), 400
+        abort(400, 'Invalid json')
     errors = validate_update(request.json, ['name', 'description', 'price', 'course'])
 
     if len(errors) != 0:
@@ -62,15 +62,15 @@ def update_menuitem(menu_id):
 
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
-        return jsonify({'error': 'Item not found'}), 404
+        abort(404, 'Item not found')
 
     restaurant = session.query(Restaurant).filter_by(
         id=item.restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     if restaurant.user_id != g.user.id:
-        abort(403)
+        abort(403, 'You are not the owner of this restaurant')
 
     if 'name' in request.json:
         item.name = request.json.get('name')
@@ -91,15 +91,15 @@ def update_menuitem(menu_id):
 def delete_menuitem(menu_id):
     item = session.query(MenuItem).filter_by(id=menu_id).first()
     if not item:
-        return jsonify({'error': 'Item not found'}), 404
+        abort(404, 'Item not found')
 
     restaurant = session.query(Restaurant).filter_by(
         id=item.restaurant_id).first()
     if not restaurant:
-        return jsonify({'error': 'Restaurant not found'}), 404
+        abort(404, 'Restaurant not found')
 
     if restaurant.user_id != g.user.id:
-        abort(403)
+        abort(403, 'You are not the owner of this restaurant')
 
     session.delete(item)
     session.commit()

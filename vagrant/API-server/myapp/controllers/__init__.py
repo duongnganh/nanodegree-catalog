@@ -29,7 +29,7 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         g.user = None
         if request.headers:
-            token = request.headers.get('token')
+            token = request.headers.get('Authorization')
             if token:
                 user_id = User.verify_auth_token(token)
                 if user_id:
@@ -37,20 +37,52 @@ def login_required(f):
                     if user:
                         g.user = user
         if not g.user:
-            abort(403)
+            abort(403, 'Invalid token')
         return f(*args, **kwargs)
 
     return decorated_function
 
 
-@app.errorhandler(404)
-def not_found(error):
-    return make_response(jsonify({'error': 'Not found'}), 404)
+@app.errorhandler(400)
+def bad_request(error):
+    if error.description == None:
+        return jsonify({'error': 'Not found'}), 400
+    return jsonify({'error': error.description}), 400
+
+
+@app.errorhandler(401)
+def unauthorized(error):
+    if error.description == None:
+        return jsonify({'error': 'Unauthorized access'}), 401
+    return jsonify({'error': error.description}), 401
 
 
 @app.errorhandler(403)
-def not_authorized(error):
-    return make_response(jsonify({'error': 'Unauthorized access'}), 403)
+def forbidden(error):
+    if error.description == None:
+        return jsonify({'error': 'Unauthorized access'}), 403
+    return jsonify({'error': error.description}), 403
+
+
+@app.errorhandler(404)
+def not_found(error):
+    if error.description == None:
+        return jsonify({'error': 'Not found'}), 404
+    return jsonify({'error': error.description}), 404
+
+
+@app.errorhandler(409)
+def conflict(error):
+    if error.description == None:
+        return jsonify({'error': 'Request conflict'}), 409
+    return jsonify({'error': error.description}), 409
+
+
+@app.errorhandler(500)
+def server_error(error):
+    if error.description == None:
+        return jsonify({'error': 'Server error'}), 500
+    return jsonify({'error': error.description}), 500
 
 
 @app.after_request
